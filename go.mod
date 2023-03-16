@@ -3,6 +3,7 @@ module go-admin
 go 1.20
 
 require (
+	github.com/cristalhq/jwt/v5 v5.0.1
 	github.com/gofiber/fiber/v2 v2.42.0
 	golang.org/x/crypto v0.7.0
 	gorm.io/driver/mysql v1.4.7
