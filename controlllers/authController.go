@@ -1,13 +1,12 @@
 package controlllers
 
 import (
-	"encoding/json"
 	"go-admin/database"
 	"go-admin/models"
+	"go-admin/util"
 	"strconv"
 	"time"
 
-	"github.com/cristalhq/jwt/v5"
 	"github.com/gofiber/fiber/v2"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -63,30 +62,11 @@ func Login(c *fiber.Ctx) error {
 		})
 	}
 
-	// create a Signer (HMAC in this example)
-	key := []byte(`secret`)
-	signer, err := jwt.NewSignerHS(jwt.HS256, key)
+	// generate a jwt Token
+	token, err := util.GenerateJwt(strconv.Itoa(int(user.Id)))
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
-
-	// create claims (you can create your own, see: Example_BuildUserClaims)
-	claims := &jwt.RegisteredClaims{
-		Issuer:    strconv.Itoa(int(user.Id)),
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour * 24)),
-	}
-
-	// create a Builder
-	builder := jwt.NewBuilder(signer)
-
-	// and build a Token
-	token, err := builder.Build(claims)
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	// here is token as a string
-	var strToken string = token.String()
 
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -94,7 +74,7 @@ func Login(c *fiber.Ctx) error {
 
 	cookie := fiber.Cookie{
 		Name:     "jwt",
-		Value:    strToken,
+		Value:    token,
 		Expires:  time.Now().Add(time.Hour * 24),
 		HTTPOnly: true,
 	}
@@ -106,45 +86,13 @@ func Login(c *fiber.Ctx) error {
 	})
 }
 
-type Claims struct {
-	jwt.RegisteredClaims
-}
-
 func User(c *fiber.Ctx) error {
-	clientToken := c.Cookies("jwt")
-	// create a Verifier (HMAC in this example)
-	key := []byte(`secret`)
-	verifier, err := jwt.NewVerifierHS(jwt.HS256, key)
-	if err != nil {
-		c.SendStatus(fiber.StatusInternalServerError)
-		return c.JSON(fiber.Map{
-			"message": "unauthenticated",
-		})
-	}
-
-	// parse and verify a token
-	tokenBytes := []byte(clientToken)
-	newToken, err := jwt.Parse(tokenBytes, verifier)
-	if err != nil {
-		c.SendStatus(fiber.StatusUnauthorized)
-		return c.JSON(fiber.Map{
-			"message": "unauthenticated",
-		})
-	}
-
-	// get Registered claims
-	var newClaims Claims
-	errClaims := json.Unmarshal(newToken.Claims(), &newClaims)
-	if errClaims != nil {
-		c.SendStatus(fiber.StatusUnauthorized)
-		return c.JSON(fiber.Map{
-			"message": "unauthenticated",
-		})
-	}
+	cookieJwt := c.Cookies("jwt")
+	id, _ := util.ParseJwt(cookieJwt)
 
 	// verify claims as you wish
 	var user models.User
-	database.DB.Where("id = ?", newClaims.Issuer).First(&user)
+	database.DB.Where("id = ?", id).First(&user)
 	return c.JSON(user)
 }
 
